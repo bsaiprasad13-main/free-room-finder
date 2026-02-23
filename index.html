@@ -380,6 +380,60 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   font-size: 10.5px; color: var(--text3); font-family: var(--mono);
   border-top: 1px solid var(--border); margin-top: 20px;
 }
+
+/* ── Edit tip speech bubble ── */
+.edit-tip {
+  position: fixed;
+  z-index: 999;
+  display: none;
+  width: 210px;
+}
+.edit-tip.show { display: block; animation: tipIn .25s ease; }
+@keyframes tipIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.edit-tip-bubble {
+  background: var(--surface2);
+  border: 1.5px solid rgba(74,222,128,.4);
+  border-radius: 12px;
+  padding: 12px 32px 12px 13px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.55);
+  position: relative;
+}
+/* Arrow pointing UP toward the edit icon */
+.edit-tip-bubble::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  right: 20px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid rgba(74,222,128,.4);
+}
+.edit-tip-bubble::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 21.5px;
+  border-left: 6.5px solid transparent;
+  border-right: 6.5px solid transparent;
+  border-bottom: 6.5px solid var(--surface2);
+}
+.edit-tip-inner {
+  display: flex; align-items: flex-start; gap: 8px;
+}
+.edit-tip-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.edit-tip-text { font-size: 12px; color: var(--text2); line-height: 1.65; }
+.edit-tip-text strong { color: var(--green); }
+.edit-tip-close {
+  position: absolute; top: 6px; right: 8px;
+  background: none; border: none;
+  color: var(--text3); font-size: 17px;
+  cursor: pointer; line-height: 1; padding: 2px 4px;
+  transition: color .15s;
+}
+.edit-tip-close:hover { color: var(--text); }
 </style>
 </head>
 <body>
@@ -416,7 +470,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
     </div>
     <div class="time-pill">
       <span class="time-val" id="timeVal">--:--</span>
-      <button class="edit-btn" onclick="openTimeModal()" title="Set custom time">
+      <button class="edit-btn" id="editBtn" onclick="openTimeModal()" title="Set custom time">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -430,6 +484,16 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   <div class="chips-row" id="chipsRow"></div>
   <div class="s-info" id="sInfo"></div>
 
+  <!-- Speech bubble tip pointing at edit icon -->
+  <div class="edit-tip" id="editTip">
+    <div class="edit-tip-bubble">
+      <button class="edit-tip-close" onclick="dismissEditTip()">×</button>
+      <div class="edit-tip-inner">
+        <span class="edit-tip-icon">⏱</span>
+        <span class="edit-tip-text">Tap the <strong>✏️ edit icon</strong> next to the time to browse rooms at any hour!</span>
+      </div>
+    </div>
+  </div>
 </header>
 
 <!-- Inform Us — static, always visible, scrolls normally -->
@@ -745,8 +809,28 @@ function renderAll() {
 }
 
 // ── Init ──
+function positionEditTip() {
+  const btn = document.getElementById('editBtn');
+  const tip = document.getElementById('editTip');
+  if (!btn || !tip) return;
+  const rect = btn.getBoundingClientRect();
+  // Position tip below the edit button, arrow points up at it
+  tip.style.top  = (rect.bottom + 8) + 'px';
+  // Align tip so arrow (right:20px of bubble) lines up with button center
+  const arrowOffsetFromRight = 20 + 8; // arrow right + half arrow width
+  const leftPos = rect.left + rect.width/2 - (210 - arrowOffsetFromRight);
+  tip.style.left = Math.max(8, Math.min(leftPos, window.innerWidth - 218)) + 'px';
+}
+function dismissEditTip() {
+  document.getElementById('editTip').classList.remove('show');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   renderAll();
+  setTimeout(() => {
+    positionEditTip();
+    document.getElementById('editTip').classList.add('show');
+  }, 800);
   const inp=document.getElementById('searchInput');
   inp.addEventListener('input', e=>{
     searchQ=e.target.value;
