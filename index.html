@@ -136,10 +136,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .time-val.amber { color: var(--amber); }
 .edit-btn {
   background: none; border: none; cursor: pointer;
-  color: var(--text3); padding: 2px; border-radius: 5px;
-  display: flex; align-items: center; transition: color .15s;
+  color: var(--green); padding: 2px; border-radius: 5px;
+  display: flex; align-items: center; transition: opacity .15s;
 }
-.edit-btn:hover { color: var(--green); }
+.edit-btn:hover { opacity: .7; }
 .live-btn {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
   padding: 3px 8px; border-radius: 20px;
@@ -490,7 +490,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
       <button class="edit-tip-close" onclick="dismissEditTip()">×</button>
       <div class="edit-tip-inner">
         <span class="edit-tip-icon">⏱</span>
-        <span class="edit-tip-text">Tap the <strong>✏️ edit icon</strong> next to the time to browse rooms at any hour!</span>
+        <span class="edit-tip-text">Tap the <strong>edit icon</strong> next to the time to browse rooms at any hour!</span>
       </div>
     </div>
   </div>
