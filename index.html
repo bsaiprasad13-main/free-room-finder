@@ -20,6 +20,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Free Rooms — IITM</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0c10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FreeRooms">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js');
+    });
+  }
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -450,6 +463,27 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   transition: color .15s;
 }
 .edit-tip-close:hover { color: var(--text); }
+
+.install-banner {
+  display: none; align-items: center; gap: 12px;
+  margin: 12px 16px; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.install-banner.show { display: flex; }
+.install-icon { font-size: 26px; flex-shrink: 0; }
+.install-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.install-text strong { font-size: 14px; color: var(--text); }
+.install-text span { font-size: 12px; color: var(--text2); }
+.install-btn {
+  flex-shrink: 0; padding: 8px 16px; background: var(--green);
+  color: #000; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.install-dismiss {
+  flex-shrink: 0; background: none; border: none;
+  color: var(--text3); font-size: 20px; cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -534,7 +568,16 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 
 <!-- Main content -->
 <div class="content" id="content"></div>
-
+  
+<div class="install-banner" id="installBanner">
+  <div class="install-icon">📲</div>
+  <div class="install-text">
+    <strong>Install Free Rooms</strong>
+    <span>Use it like a native app — works offline too</span>
+  </div>
+  <button class="install-btn" id="installBtn">Install</button>
+  <button class="install-dismiss" id="installDismiss">×</button>
+</div>
 <div class="footer">135 empty rooms tracked · college hours 8 AM – 6 PM</div>
 
 <!-- ══ READ ME MODAL ══ -->
@@ -843,6 +886,25 @@ function dismissEditTip() {
 
 document.addEventListener('DOMContentLoaded', () => {
   renderAll();
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBanner').classList.add('show');
+});
+document.getElementById('installBtn').addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById('installBanner').classList.remove('show');
+});
+document.getElementById('installDismiss').addEventListener('click', () => {
+  document.getElementById('installBanner').classList.remove('show');
+});
+window.addEventListener('appinstalled', () => {
+  document.getElementById('installBanner').classList.remove('show');
+});
   setTimeout(() => {
     positionEditTip();
     document.getElementById('editTip').classList.add('show');
