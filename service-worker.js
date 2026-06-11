@@ -1,4 +1,4 @@
-const CACHE_NAME = 'free-rooms-v1';
+const CACHE_NAME = 'free-rooms-v2';
 
 // Files to cache on install
 const PRECACHE_URLS = [
