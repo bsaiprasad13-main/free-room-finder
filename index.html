@@ -887,6 +887,9 @@ function clearSearch(rerender=true) {
 // ── Full render ──
 function renderAll() {
   renderTime(); renderTabs(); renderChips(); renderStatus(); renderContent();
+   if (deferredPrompt) {
+    document.getElementById('installBanner').classList.add('show');
+  }
 }
 
 // ── Init ──
@@ -905,15 +908,15 @@ function positionEditTip() {
 function dismissEditTip() {
   document.getElementById('editTip').classList.remove('show');
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  renderAll();
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
   document.getElementById('installBanner').classList.add('show');
 });
+document.addEventListener('DOMContentLoaded', () => {
+  renderAll();
+
 document.getElementById('installBtn').addEventListener('click', async () => {
   if (!deferredPrompt) return;
   deferredPrompt.prompt();
