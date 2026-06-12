@@ -701,7 +701,7 @@ function renderTabs() {
     b.className = 'day-btn' + (day===activeDay?' active':'');
     b.textContent = SHORT[day];
     if(day===today) { const d=document.createElement('span'); d.className='today-dot'; b.appendChild(d); }
-    b.onclick = () => { activeDay=day; activeBldg=null; clearSearch(false); renderChips(); renderContent(); renderTabs(); if(deferredPrompt) document.getElementById('installBanner').classList.add('show'); };
+    b.onclick = () => { activeDay=day; activeBldg=null; clearSearch(false); renderChips(); renderContent(); renderTabs(); if(deferredPrompt) document.getElementById('installBanner').classList.add('show'); gtag('event', 'day_tab_click', { day: day }); };
     c.appendChild(b);
   });
 }
@@ -718,6 +718,7 @@ function renderChips() {
     el.onclick = () => {
       activeBldg = (isAll||activeBldg===b) ? null : b;
       renderChips(); renderContent();
+      gtag('event', 'building_filter', { building: b });
     };
     c.appendChild(el);
   });
@@ -833,7 +834,7 @@ function renderContent() {
           </div>
           <div class="room-grid">`;
       if(!vis.length) html+=`<div class="empty-msg">${currentSlot.rooms.length?'No rooms match your search':'All rooms occupied'}</div>`;
-      else vis.forEach(r=>{html+=`<div class="room-card"><span class="room-icon">🚪</span><span class="room-name">${r}</span></div>`;});
+      else { gtag('event', 'rooms_found', { count: vis.length, day: activeDay, slot: 'now' }); vis.forEach(r=>{html+=`<div class="room-card"><span class="room-icon">🚪</span><span class="room-name">${r}</span></div>`;}); }
       html+=`</div></div>`;
     }
   }
@@ -853,7 +854,7 @@ function renderContent() {
         </div>
         <div class="room-grid">`;
       if(!vis.length) html+=`<div class="empty-msg">${s.rooms.length?'No rooms match your search':'All rooms occupied'}</div>`;
-      else vis.forEach(r=>{html+=`<div class="room-card"><span class="room-icon">🚪</span><span class="room-name">${r}</span></div>`;});
+      else { gtag('event', 'rooms_found', { count: vis.length, day: activeDay, slot: 'upcoming' }); vis.forEach(r=>{html+=`<div class="room-card"><span class="room-icon">🚪</span><span class="room-name">${r}</span></div>`;}); }
       html+=`</div></div>`;
     });
   }
@@ -933,6 +934,7 @@ document.getElementById('installBtn').addEventListener('click', async () => {
   const { outcome } = await deferredPrompt.userChoice;
   deferredPrompt = null;
   document.getElementById('installBanner').classList.remove('show');
+  if(outcome === 'accepted') gtag('event', 'pwa_install', { event_category: 'PWA' });
 });
 document.getElementById('installDismiss').addEventListener('click', () => {
   document.getElementById('installBanner').classList.remove('show');
@@ -949,6 +951,7 @@ window.addEventListener('appinstalled', () => {
     searchQ=e.target.value;
     document.getElementById('clearBtn').classList.toggle('show', searchQ.length>0);
     renderContent();
+    if(searchQ.length > 2) gtag('event', 'search_used', { query: searchQ });
   });
   inp.addEventListener('keydown', e=>{ if(e.key==='Escape') clearSearch(); });
   document.getElementById('clearBtn').addEventListener('click', ()=>clearSearch());
