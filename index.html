@@ -9,6 +9,8 @@
   gtag('js', new Date());
 
   gtag('config', 'G-PBNBGGPBM0');
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+  gtag('set', 'user_properties', { app_mode: isPWA ? 'pwa' : 'browser' });
 </script>
 <!-- Vercel Analytics -->
 <script defer src="/_vercel/insights/script.js"></script>
