@@ -850,6 +850,21 @@
       line-height: 1.3;
     }
 
+    .room-txt {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .room-till {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--green);
+      opacity: .75;
+      margin-top: 2px;
+      white-space: nowrap;
+    }
+
     .empty-msg {
       grid-column: 1/-1;
       text-align: center;
@@ -998,6 +1013,108 @@
     .inform-link:hover {
       background: rgba(248, 113, 113, .2);
       transform: translateY(-1px);
+    }
+
+    /* ══════════════════════════════════════════
+   FREE BETWEEN TWO TIMES
+   ══════════════════════════════════════════ */
+    .range-sec {
+      margin: 8px 16px 0;
+      padding: 13px 16px 14px;
+      border: 1.5px solid rgba(74, 222, 128, .25);
+      border-radius: var(--r);
+      background: rgba(74, 222, 128, .03);
+    }
+
+    .range-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--green);
+      margin-bottom: 10px;
+    }
+
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .range-row input[type=time] {
+      flex: 1;
+      min-width: 0;
+      padding: 9px 8px;
+      background: var(--surface2);
+      border: 1.5px solid var(--border2);
+      border-radius: 9px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+      outline: none;
+      color-scheme: dark;
+    }
+
+    .range-row input[type=time]:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px var(--green-dim);
+    }
+
+    .range-to {
+      font-size: 12px;
+      color: var(--text3);
+    }
+
+    .range-find {
+      padding: 10px 14px;
+      border-radius: 9px;
+      border: none;
+      background: var(--green);
+      color: #0a0c10;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .range-err {
+      font-size: 12px;
+      color: var(--red);
+      margin-top: 8px;
+    }
+
+    .range-err:empty {
+      display: none;
+    }
+
+    #rangeResults:not(:empty) {
+      margin-top: 14px;
+    }
+
+    .range-sec .room-card::before {
+      background: var(--green);
+    }
+
+    .range-clear {
+      width: 26px;
+      height: 26px;
+      flex-shrink: 0;
+      border-radius: 7px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text2);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .time-badge + .range-clear {
+      margin-left: auto;
     }
 
     /* ══════════════════════════════════════════
@@ -1260,6 +1377,19 @@
     </div>
   </div>
 
+  <!-- Free between two times -->
+  <div class="range-sec">
+    <div class="range-title"><span style="font-size:16px">⏳</span>Find rooms free between two times</div>
+    <div class="range-row">
+      <input type="time" id="rangeFrom" aria-label="From">
+      <span class="range-to">to</span>
+      <input type="time" id="rangeTo" aria-label="To">
+      <button class="range-find" onclick="findRange()">Find</button>
+    </div>
+    <div class="range-err" id="rangeErr"></div>
+    <div id="rangeResults"></div>
+  </div>
+
   <!-- Status bar -->
   <div id="statusBar"></div>
 
@@ -1291,7 +1421,9 @@
         <p>Slots that have already passed are <strong>hidden automatically</strong>. Only rooms empty from the current
           time onwards are shown.</p>
         <p>Switch days using the tabs. Filter by building using the chips. Use the <strong>edit icon</strong> next to
-          the time to browse any hour.</p>
+          the time to browse any hour. Use <strong>Find rooms free between two times</strong> to see rooms that stay
+          free the whole time (e.g. 10 AM – 12 PM).</p>
+        <p>Each room shows <strong>how long it stays free</strong>, longest first. Breaks and lunch count as free.</p>
       </div>
     </div>
   </div>
@@ -1315,12 +1447,14 @@
     const SHORT = { Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun' };
     const WKND = new Set(['Saturday', 'Sunday']);
     let BLDGS = ['All']; // 'All' + buildings from timetable.json
+    let ALL_ROOMS = [];  // every room named anywhere in timetable.json
     const C_START = 480, C_END = 1080; // 8am, 6pm in mins
 
     let activeDay = todayName() || 'Monday';
     let activeBldg = null;
     let searchQ = '';
     let manualMins = null;
+    let rangeFrom = null, rangeTo = null; // "Free between" search, in mins; null when not in use
     let informOpen = false;
 
     // ── Helpers ──
@@ -1346,6 +1480,77 @@
       }
       return cvt(parts[0]) + ' – ' + cvt(parts[1]);
     }
+    function fmtRange(a, b) {
+      // "10:00–11:30 AM", or "10:00 AM–12:00 PM" when the meridiem changes
+      const sa = fmt(a), sb = fmt(b);
+      return (sa.slice(-2) === sb.slice(-2) ? sa.slice(0, -3) : sa) + '–' + sb;
+    }
+    function toHM(m) { return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+    function fromHM(v) { const [h, m] = v.split(':').map(Number); return h * 60 + m; }
+
+    // ── Search + building filter ──
+    function levenshtein(a, b) {
+      const m = a.length, n = b.length;
+      const dp = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+      for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+        dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      return dp[m][n];
+    }
+
+    function fuzzyMatch(roomName, query) {
+      if (!query) return true;
+      const rn = roomName.toLowerCase().replace(/\s+/g, '');
+      const q2 = query.toLowerCase().replace(/\s+/g, '');
+      if (q2.length <= 2) return rn.startsWith(q2);
+      // Exact prefix match (fast path)
+      if (rn.startsWith(q2)) return true;
+      // Fuzzy prefix match: first character MUST match exactly to avoid
+      // cross-building matches (e.g. "csb" must not match "BSB*" or "HSB*")
+      if (rn[0] !== q2[0]) return false;
+      const ql = q2.length;
+      if (rn.length >= ql && levenshtein(rn.slice(0, ql), q2) <= 1) return true;
+      return false;
+    }
+    function fRooms(rooms) {
+      const q = searchQ.trim().toLowerCase().replace(/\s+/g, '');
+      return rooms.filter(r => fuzzyMatch(r, q) && (!activeBldg || r.toUpperCase().startsWith(activeBldg)));
+    }
+
+    // ── Free-until ──
+    // Some slots summarise shorter ones (14:00–16:45 lists exactly the rooms free in both
+    // 14:00–15:15 and 15:30–16:45), so only slots that don't contain another slot are used.
+    // Time no slot covers (breaks, lunch) counts as free.
+    let atomicCache = {};
+    function atomicSlots(day) {
+      if (atomicCache[day]) return atomicCache[day];
+      const slots = DATA[day] || [];
+      return atomicCache[day] = slots
+        .filter(s => !slots.some(t => s.start <= t.start && t.end <= s.end && t.end - t.start < s.end - s.start))
+        .map(s => ({ start: s.start, end: s.end, free: new Set(s.rooms) }))
+        .sort((a, b) => a.start - b.start);
+    }
+    // Minute the room is next occupied at or after `from`: `from` itself if busy then, Infinity if free all day
+    function freeUntil(day, room, from) {
+      for (const s of atomicSlots(day)) {
+        if (s.end <= from) continue;
+        if (!s.free.has(room)) return Math.max(s.start, from);
+      }
+      return Infinity;
+    }
+    function roomCard(r, from) {
+      const till = freeUntil(activeDay, r, from);
+      let label = '';
+      if (till === Infinity) label = `<span class="room-till">rest of day</span>`;
+      else if (till > from) label = `<span class="room-till">till ${fmt(till)}</span>`;
+      return `<div class="room-card"><span class="room-icon">🚪</span><span class="room-txt"><span class="room-name">${r}</span>${label}</span></div>`;
+    }
+    // Longest-free rooms first, then by name
+    function byFreeUntil(rooms, from) {
+      return rooms
+        .map(r => [r, freeUntil(activeDay, r, from)])
+        .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+        .map(x => x[0]);
+    }
 
     // ── Read Me modal ──
     function openReadme() { document.getElementById('readmeBg').classList.add('open'); }
@@ -1354,9 +1559,7 @@
 
     // ── Time modal ──
     function openTimeModal() {
-      const m = curMins();
-      document.getElementById('timeInput').value =
-        String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+      document.getElementById('timeInput').value = toHM(curMins());
       document.getElementById('timeBg').classList.add('open');
     }
     function closeTimeModal() { document.getElementById('timeBg').classList.remove('open'); }
@@ -1364,11 +1567,50 @@
     function applyTime() {
       const v = document.getElementById('timeInput').value;
       if (!v) return;
-      const [h, m] = v.split(':').map(Number);
-      manualMins = h * 60 + m;
+      manualMins = fromHM(v);
       closeTimeModal(); renderAll();
     }
     function resetLive() { manualMins = null; renderAll(); }
+
+    // ── Free between two times ──
+    function findRange() {
+      const f = document.getElementById('rangeFrom').value, t = document.getElementById('rangeTo').value;
+      const err = document.getElementById('rangeErr');
+      if (!f || !t) { err.textContent = 'Pick both a start and an end time.'; return; }
+      const a = fromHM(f), b = fromHM(t);
+      if (b <= a) { err.textContent = 'End time must be after the start time.'; return; }
+      if (a < C_START || b > C_END) { err.textContent = 'Pick times within college hours (8 AM – 6 PM).'; return; }
+      err.textContent = '';
+      rangeFrom = a; rangeTo = b;
+      renderRange();
+      gtag('event', 'range_search', { day: activeDay, minutes: b - a });
+    }
+    function clearRange() {
+      rangeFrom = rangeTo = null;
+      document.getElementById('rangeErr').textContent = '';
+      renderRange();
+    }
+    function renderRange() {
+      const el = document.getElementById('rangeResults');
+      if (rangeFrom === null) { el.innerHTML = ''; return; }
+      const a = rangeFrom, b = rangeTo;
+      let count = '', body;
+      if (!(DATA[activeDay] || []).length) {
+        body = `<div class="empty-msg">No classes on ${activeDay}. Pick a weekday.</div>`;
+      } else {
+        const all = byFreeUntil(ALL_ROOMS, a).filter(r => freeUntil(activeDay, r, a) >= b);
+        const vis = fRooms(all);
+        count = `<span class="room-count rc-green">${vis.length} room${vis.length !== 1 ? 's' : ''}</span>`;
+        if (!vis.length) body = `<div class="empty-msg">${all.length ? 'No rooms match your search or filter' : 'No room stays free that long. Try a shorter range.'}</div>`;
+        else body = vis.map(r => roomCard(r, a)).join('');
+      }
+      el.innerHTML = `<div class="slot-hdr">
+          <span class="time-badge now">⏱ ${SHORT[activeDay]} · ${fmtRange(a, b)}</span>
+          ${count}
+          <button class="range-clear" onclick="clearRange()" title="Clear" aria-label="Clear">×</button>
+        </div>
+        <div class="room-grid">${body}</div>`;
+    }
 
     // ── Inform Us ──
     function toggleInform() {
@@ -1439,6 +1681,7 @@
       const el = document.getElementById('content'), infoEl = document.getElementById('sInfo');
       const today = todayName(), m = curMins();
       const q = searchQ.trim().toLowerCase().replace(/\s+/g, '');
+      renderRange(); // same day, search and building filter as the slot list
 
       // Weekend card
       if (isWkndDay(activeDay) && !isManual()) {
@@ -1484,40 +1727,11 @@
         else upcoming.push(s);
       });
 
-      function levenshtein(a, b) {
-        const m = a.length, n = b.length;
-        const dp = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0));
-        for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
-          dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-        return dp[m][n];
-      }
-
-      function fuzzyMatch(roomName, query) {
-        if (!query) return true;
-        const rn = roomName.toLowerCase().replace(/\s+/g, '');
-        const q2 = query.toLowerCase().replace(/\s+/g, '');
-        if (q2.length <= 2) return rn.startsWith(q2);
-        // Exact prefix match (fast path)
-        if (rn.startsWith(q2)) return true;
-        // Fuzzy prefix match: first character MUST match exactly to avoid
-        // cross-building matches (e.g. "csb" must not match "BSB*" or "HSB*")
-        if (rn[0] !== q2[0]) return false;
-        const ql = q2.length;
-        if (rn.length >= ql && levenshtein(rn.slice(0, ql), q2) <= 1) return true;
-        return false;
-      }
-
-      function fRooms(rooms) {
-        return rooms.filter(r => {
-          return fuzzyMatch(r, q) && (!activeBldg || r.toUpperCase().startsWith(activeBldg));
-        });
-      }
-
       let html = '', total = 0, shown = 0;
 
       // Current slot
       if (currentSlot) {
-        const vis = fRooms(currentSlot.rooms);
+        const vis = byFreeUntil(fRooms(currentSlot.rooms), filterM);
         if (!q || vis.length > 0) {
           total += vis.length; shown++;
           html += `<div class="sec-label">📍 Right now</div>
@@ -1529,7 +1743,7 @@
           </div>
           <div class="room-grid">`;
           if (!vis.length) html += `<div class="empty-msg">${currentSlot.rooms.length ? 'No rooms match your search' : 'All rooms occupied'}</div>`;
-          else { gtag('event', 'rooms_found', { count: vis.length, day: activeDay, slot: 'now' }); vis.forEach(r => { html += `<div class="room-card"><span class="room-icon">🚪</span><span class="room-name">${r}</span></div>`; }); }
+          else { gtag('event', 'rooms_found', { count: vis.length, day: activeDay, slot: 'now' }); vis.forEach(r => { html += roomCard(r, filterM); }); }
           html += `</div></div>`;
         }
       }
@@ -1539,7 +1753,7 @@
         const anyVis = upcoming.some(s => !q || fRooms(s.rooms).length > 0);
         if (anyVis) html += `<div class="sec-label">⏭ Upcoming slots</div>`;
         upcoming.forEach((s, i) => {
-          const vis = fRooms(s.rooms);
+          const vis = byFreeUntil(fRooms(s.rooms), s.start);
           if (q && !vis.length) return;
           total += vis.length; shown++;
           html += `<div class="slot-sec slot-up" style="animation-delay:${(i * .04).toFixed(2)}s">
@@ -1549,7 +1763,7 @@
         </div>
         <div class="room-grid">`;
           if (!vis.length) html += `<div class="empty-msg">${s.rooms.length ? 'No rooms match your search' : 'All rooms occupied'}</div>`;
-          else { gtag('event', 'rooms_found', { count: vis.length, day: activeDay, slot: 'upcoming' }); vis.forEach(r => { html += `<div class="room-card"><span class="room-icon">🚪</span><span class="room-name">${r}</span></div>`; }); }
+          else { gtag('event', 'rooms_found', { count: vis.length, day: activeDay, slot: 'upcoming' }); vis.forEach(r => { html += roomCard(r, s.start); }); }
           html += `</div></div>`;
         });
       }
@@ -1600,6 +1814,8 @@
         const tt = await res.json();
         DATA = tt.days || {};
         BLDGS = ['All', ...(tt.buildings || [])];
+        ALL_ROOMS = [...new Set(Object.values(DATA).flat().flatMap(s => s.rooms))];
+        atomicCache = {};
         timetableLoaded = true;
         renderAll();
       } catch (err) {
@@ -1642,6 +1858,13 @@
     document.addEventListener('DOMContentLoaded', () => {
       renderTime();
       loadTimetable();
+
+      // "Free between" defaults: this hour to two hours later, within college hours
+      const from = Math.min(Math.max(Math.floor(realMins() / 60) * 60, C_START), C_END - 120);
+      document.getElementById('rangeFrom').value = toHM(from);
+      document.getElementById('rangeTo').value = toHM(from + 120);
+      ['rangeFrom', 'rangeTo'].forEach(id =>
+        document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') findRange(); }));
 
       document.getElementById('installBtn').addEventListener('click', async () => {
         if (!deferredPrompt) return;
