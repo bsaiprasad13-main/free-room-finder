@@ -1268,7 +1268,7 @@
 
 
 
-  <div class="footer">135 empty rooms tracked · college hours 8 AM – 6 PM</div>
+  <div class="footer"><span id="roomCount">135</span> empty rooms tracked · college hours 8 AM – 6 PM</div>
 
   <!-- ══ READ ME MODAL ══ -->
   <div class="modal-bg" id="readmeBg" onclick="handleReadmeBgClick(event)">
@@ -1602,6 +1602,9 @@
         BLDGS = ['All', ...(tt.buildings || [])];
         timetableLoaded = true;
         renderAll();
+        // Footer count follows timetable.json, so a new semester's file updates it too
+        document.getElementById('roomCount').textContent =
+          new Set(Object.values(DATA).flat().flatMap(s => s.rooms)).size;
       } catch (err) {
         document.getElementById('content').innerHTML =
           `<div class="empty-msg">Couldn't load the timetable. Check your connection and reopen the app.</div>`;
