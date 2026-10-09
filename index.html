@@ -1684,7 +1684,8 @@
       renderRange(); // same day, search and building filter as the slot list
 
       // Weekend card
-      if (isWkndDay(activeDay) && !isManual()) {
+      // (also with a custom time: there are no weekend slots to browse)
+      if (isWkndDay(activeDay)) {
         const isToday = activeDay === today;
         el.innerHTML = `<div class="state-card">
       <span class="emoji">🏖️</span>
@@ -1692,7 +1693,9 @@
       <p>${isToday ? "It's the weekend — no classes scheduled.<br>Enjoy your break and see you on Monday! 😊"
             : "No timetable slots on " + activeDay + ". Pick a weekday to find empty rooms."}</p>
     </div>`;
-        document.getElementById('statusBar').innerHTML = ''; return;
+        // Day tabs don't re-render the status bar, so keep the custom-time one for weekdays
+        if (!isManual()) document.getElementById('statusBar').innerHTML = '';
+        return;
       }
 
       // Before 8am
