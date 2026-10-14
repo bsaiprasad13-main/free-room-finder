@@ -1,23 +1,34 @@
 """Build timetable.json from the college's "SlotWise_SubjectWise List" downloads.
 
 Usage (from the repo root):
-    python scripts/build_timetable.py "path/to/SlotWise_SubjectWise List*.xlsx" ...
+    python scripts/build_timetable.py "Downloads/SlotWise_SubjectWise List__2026-10-14*.xlsx" \
+        --fill-from "Downloads/SlotWise_SubjectWise List__2026-07-13.xlsx"
 
 Pass every department's .xlsx file (globs are fine). Only the Python standard
-library is needed. timetable.json is overwritten and a summary of what was
-skipped is printed, so check it before committing.
+library is needed. timetable.json is overwritten and a summary is printed, so
+check it before committing.
+
+The rule throughout: when unsure, show a room as busy. Sending a student to an
+occupied room is worse than hiding a free one.
 
 How a room is decided to be free:
   * Every course row names a Slot, an optional AdditionalSlot and a RoomNo.
-    Rows with no slot or no room are dropped.
+  * --fill-from (an older download) fills gaps in the main files: a course
+    with a blank room, or with fewer rooms than before, gets the older file's
+    rooms when its slot is unchanged. Departments missing from the main files
+    are taken from it whole. Rows still without a slot or room are dropped.
   * GRID below (the institute slot chart) gives the times each slot meets.
     AdditionalSlot codes block their times too. Codes like A1 or D2 that aren't
     on the chart block all of their base letter's times. Codes with no time on
     the chart (PP, UU, XX, NT, ...) are skipped.
-  * A room is free in a slot when no course uses it then. Only rooms named in
-    the files are listed. Labs and halls without a room number are left out.
+  * reported_occupied.json lists rooms students found in use; they are never
+    shown as free at those times.
+  * A room is free in a slot when nothing above uses it then. Only rooms named
+    in the main files are listed; rooms only in --fill-from just block.
+    Labs and halls without a room number are left out.
   * 14:00-16:45 lists rooms free in both afternoon halves.
 """
+import argparse
 import glob
 import json
 import re
@@ -27,7 +38,9 @@ import zipfile
 from collections import Counter
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parent.parent / 'timetable.json'
+HERE = Path(__file__).resolve().parent
+OUT = HERE.parent / 'timetable.json'
+REPORTED = HERE / 'reported_occupied.json'
 
 # (label, start, end) in minutes; the order matches GRID columns
 TIMES = [('8:00–8:50', 480, 530), ('9:00–9:50', 540, 590), ('10:00–10:50', 600, 650),
@@ -76,7 +89,8 @@ def read_rows(path):
 
 
 def room_names(raw):
-    """'ESB 106, ESB 127' -> ['ESB106', 'ESB127']; 'NAC II 238' -> ['NACII238'].
+    """'ESB 106, ESB 127' -> ['ESB106', 'ESB127']; 'NAC II 238' -> ['NACII238'];
+    'NAC-2-202' -> ['NAC2202'].
 
     A number after a comma reuses the previous building ('RMN 101, 102').
     Bare numbers, labs and halls ('531', 'CAE LAB', 'DCIF') give nothing.
@@ -84,7 +98,8 @@ def room_names(raw):
     names, bldg = [], None
     for part in re.split(r'[,+]', (raw or '').upper()):
         part = re.sub(r'\bNAC[\s-]*II\b', 'NACII', part)
-        for m in re.finditer(r'([A-Z]+)?[\s-]*(\d+[A-Z]?)\b', part):
+        part = re.sub(r'\bNAC[\s-]*2[\s-]+(?=\d)', 'NAC2 ', part)
+        for m in re.finditer(r'([A-Z]+2?)?[\s-]*(\d+[A-Z]?)\b', part):
             bldg = m.group(1) or bldg
             if bldg:
                 names.append(bldg + m.group(2))
@@ -118,29 +133,65 @@ def to_json(buildings, days):
             '  "days": {\n' + ',\n'.join(day_blocks) + '\n  }\n}\n')
 
 
-def main(patterns):
+def course(row):
+    return (row.get('CourseNo') or '').strip().upper()
+
+
+def dept(row):
+    return re.match(r'[A-Z]*', course(row)).group()
+
+
+def main(patterns, fill_from):
     files = sorted({f for p in patterns for f in glob.glob(p)})
     if not files:
         sys.exit('No .xlsx files matched. Pass the SlotWise_SubjectWise List downloads.')
-    busy = {}                      # room -> set of (day, column) it is in use
-    rooms = set()
-    dropped, skipped, unnamed = 0, Counter(), Counter()
-    for f in files:
-        for row in read_rows(f):
-            slots = slot_codes(row.get('Slot'))
-            names = room_names(row.get('RoomNo'))
-            if not slots or not names:
-                dropped += 1
-                if slots and (row.get('RoomNo') or '').strip().strip('-'):
-                    unnamed[row['RoomNo'].strip()] += 1
+    rows = [r for f in files for r in read_rows(f)]
+    rooms = {n for r in rows if slot_codes(r.get('Slot')) for n in room_names(r.get('RoomNo'))}  # rooms the app lists
+
+    filled, widened, added_depts = 0, 0, Counter()
+    if fill_from:
+        old = read_rows(fill_from)
+        old_rooms = {}             # (course, slot) -> rooms in the older file
+        for r in old:
+            old_rooms.setdefault((course(r), (r.get('Slot') or '').strip().upper()), set()).update(room_names(r.get('RoomNo')))
+        for r in rows:
+            prev = old_rooms.get((course(r), (r.get('Slot') or '').strip().upper()), set())
+            now = set(room_names(r.get('RoomNo')))
+            if prev and not now:
+                filled += 1
+            elif prev and now < prev:
+                widened += 1
+            else:
                 continue
-            rooms.update(names)
-            codes = {g for c in slots + slot_codes(row.get('AdditionalSlot')) for g in on_grid(c, skipped)}
-            for day, cells in GRID.items():
-                for col, cell in enumerate(cells):
-                    if codes & set(cell.split()):
-                        for r in names:
-                            busy.setdefault(r, set()).add((day, col))
+            r['RoomNo'] = ', '.join(sorted(now | prev))
+        depts = {dept(r) for r in rows}
+        for r in old:
+            if dept(r) not in depts:
+                added_depts[dept(r)] += 1
+                rows.append(r)
+
+    busy = {}                      # room -> set of (day, column) it is in use
+    dropped, skipped, unnamed = 0, Counter(), Counter()
+    for row in rows:
+        slots = slot_codes(row.get('Slot'))
+        names = room_names(row.get('RoomNo'))
+        if not slots or not names:
+            dropped += 1
+            if slots and (row.get('RoomNo') or '').strip().strip('-'):
+                unnamed[row['RoomNo'].strip()] += 1
+            continue
+        codes = {g for c in slots + slot_codes(row.get('AdditionalSlot')) for g in on_grid(c, skipped)}
+        for day, cells in GRID.items():
+            for col, cell in enumerate(cells):
+                if codes & set(cell.split()):
+                    for r in names:
+                        busy.setdefault(r, set()).add((day, col))
+
+    reported = json.loads(REPORTED.read_text(encoding='utf-8'))['entries']
+    starts = [t.split('–')[0] for t, _, _ in TIMES]
+    for room, day, start in reported:
+        busy.setdefault(room, set()).add((day, starts.index(start)))
+    not_listed = sorted({room for room, _, _ in reported if room not in rooms})
 
     ordered = sorted(rooms, key=lambda r: (re.match(r'[A-Z]+', r).group(), int(re.search(r'\d+', r).group()), r))
     days = {}
@@ -155,6 +206,12 @@ def main(patterns):
     OUT.write_text(to_json(buildings, days), encoding='utf-8', newline='\n')
 
     print(f'Read {len(files)} files. Wrote {OUT.name}: {len(ordered)} rooms in {len(buildings)} buildings.')
+    if fill_from:
+        print(f'From {Path(fill_from).name}: {filled} blank rooms filled, {widened} room lists widened, '
+              f'departments added: {dict(added_depts) or "none"}.')
+    print(f'Applied {len(reported)} reported-occupied entries from {REPORTED.name}.')
+    if not_listed:
+        print('  (these reported rooms are not in the room list anyway):', not_listed)
     print(f'Dropped {dropped} rows with no slot or no room.')
     if unnamed:
         print('Rooms without a building and number (left out):', dict(unnamed.most_common()))
@@ -163,4 +220,8 @@ def main(patterns):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    ap.add_argument('files', nargs='+', help='SlotWise_SubjectWise List .xlsx downloads (globs ok)')
+    ap.add_argument('--fill-from', help='an older download used to fill blank or shortened room lists')
+    args = ap.parse_args()
+    main(args.files, args.fill_from)
