@@ -1,0 +1,19 @@
+{
+  "_note": "Rooms students reported occupied. build_timetable.py never lists these as free, whatever the course list says. Add new complaints here as [room, day, slot start]; for the afternoon use 14:00 and/or 15:30.",
+  "entries": [
+    ["RJN302", "Monday", "10:00"],
+    ["CRC103", "Monday", "10:00"],
+    ["RJN101", "Monday", "11:00"],
+    ["BSB317", "Monday", "14:00"],
+    ["BSB317", "Monday", "15:30"],
+    ["ED107", "Tuesday", "14:00"],
+    ["ED107", "Tuesday", "15:30"],
+    ["CRC305", "Wednesday", "9:00"],
+    ["RMN301", "Wednesday", "9:00"],
+    ["RMN301", "Wednesday", "10:00"],
+    ["HSB211", "Thursday", "9:00"],
+    ["MDS217", "Thursday", "9:00"],
+    ["HSB211", "Thursday", "10:00"],
+    ["RMN201", "Thursday", "11:00"]
+  ]
+}
