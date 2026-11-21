@@ -138,6 +138,24 @@
       color: var(--green);
     }
 
+    /* Semester the timetable is for, next to the name */
+    .sem-pill {
+      margin-left: 8px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border2);
+      background: var(--surface);
+      color: var(--text2);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .sem-pill[hidden] {
+      display: none;
+    }
+
     /* Read Me button — top right */
     .readme-btn {
       margin-left: auto;
@@ -1297,6 +1315,7 @@
       <div class="brand">
         <div class="pulse" id="pulseDot"></div>
         <div class="brand-name">Free <span>Rooms</span></div>
+        <span class="sem-pill" id="semPill" hidden></span>
       </div>
       <button class="readme-btn" onclick="openReadme()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -1359,6 +1378,9 @@
     <button class="install-dismiss" id="installDismiss">×</button>
   </div>
 
+  <!-- Shown only when today is outside the timetable's semester -->
+  <div id="semNotice"></div>
+
   <!-- Inform Us — static, always visible, scrolls normally -->
   <div class="inform-sec">
     <div class="inform-toggle" onclick="toggleInform()">
@@ -1398,7 +1420,7 @@
 
 
 
-  <div class="footer"><span id="roomCount">103</span> empty rooms tracked · college hours 8 AM – 6 PM</div>
+  <div class="footer"><span id="roomCount">121</span> empty rooms tracked · college hours 8 AM – 6 PM</div>
 
   <!-- ══ READ ME MODAL ══ -->
   <div class="modal-bg" id="readmeBg" onclick="handleReadmeBgClick(event)">
@@ -1424,6 +1446,7 @@
           the time to browse any hour. Use <strong>Find rooms free between two times</strong> to see rooms that stay
           free the whole time (e.g. 10 AM – 12 PM).</p>
         <p>Each room shows <strong>how long it stays free</strong>, longest first. Breaks and lunch count as free.</p>
+        <p id="semReadme" hidden>Rooms are based on the <strong></strong> course list.</p>
       </div>
     </div>
   </div>
@@ -1448,6 +1471,7 @@
     const WKND = new Set(['Saturday', 'Sunday']);
     let BLDGS = ['All']; // 'All' + buildings from timetable.json
     let ALL_ROOMS = [];  // every room named anywhere in timetable.json
+    let SEMESTER = null; // {name, starts?, ends?} from timetable.json
     const C_START = 480, C_END = 1080; // 8am, 6pm in mins
 
     let activeDay = todayName() || 'Monday';
@@ -1799,8 +1823,32 @@
     }
 
     // ── Full render ──
+    // ── Semester ──
+    // Pill and Read Me line name the semester; outside its dates an amber notice
+    // warns that rooms may not match current classes.
+    function renderSemester() {
+      const pill = document.getElementById('semPill'), readme = document.getElementById('semReadme');
+      const notice = document.getElementById('semNotice');
+      pill.hidden = readme.hidden = !SEMESTER;
+      notice.innerHTML = '';
+      if (!SEMESTER) return;
+      pill.textContent = SEMESTER.name;
+      readme.querySelector('strong').textContent = SEMESTER.name;
+      if (!SEMESTER.starts || !SEMESTER.ends) return;
+      const n = new Date();
+      const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+      let txt = '';
+      if (today < SEMESTER.starts) {
+        const d = new Date(SEMESTER.starts + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        txt = `📅 ${SEMESTER.name} · classes start ${d}`;
+      } else if (today > SEMESTER.ends) {
+        txt = `⚠️ ${SEMESTER.name} is over · may be wrong`;
+      }
+      if (txt) notice.innerHTML = `<div class="status-bar manual"><span class="sb-dot"></span><span>${txt}</span></div>`;
+    }
+
     function renderAll() {
-      renderTime(); renderTabs(); renderChips(); renderStatus(); renderContent();
+      renderTime(); renderTabs(); renderChips(); renderStatus(); renderSemester(); renderContent();
       if (deferredPrompt) {
         document.getElementById('installBanner').classList.add('show');
       }
@@ -1817,6 +1865,7 @@
         const tt = await res.json();
         DATA = tt.days || {};
         BLDGS = ['All', ...(tt.buildings || [])];
+        SEMESTER = tt.semester || null;
         ALL_ROOMS = [...new Set(Object.values(DATA).flat().flatMap(s => s.rooms))];
         atomicCache = {};
         timetableLoaded = true;

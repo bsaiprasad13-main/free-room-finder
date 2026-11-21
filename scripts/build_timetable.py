@@ -1,8 +1,11 @@
 """Build timetable.json from the college's "SlotWise_SubjectWise List" downloads.
 
 Usage (from the repo root):
-    python scripts/build_timetable.py "Downloads/SlotWise_SubjectWise List__2026-10-14*.xlsx" \
-        --fill-from "Downloads/SlotWise_SubjectWise List__2026-07-13.xlsx"
+    python scripts/build_timetable.py "Downloads/SlotWise_SubjectWise List__2026-11-21.xlsx" \
+        --semester "Jan–May 2027" [--starts 2027-01-04 --ends 2027-05-07]
+
+--semester is the name shown in the app. With --starts/--ends the app also
+warns when today is outside the semester. --fill-from (below) is optional.
 
 Pass every department's .xlsx file (globs are fine). Only the Python standard
 library is needed. timetable.json is overwritten and a summary is printed, so
@@ -20,7 +23,9 @@ How a room is decided to be free:
   * GRID below (the institute slot chart) gives the times each slot meets.
     AdditionalSlot codes block their times too. Codes like A1 or D2 that aren't
     on the chart block all of their base letter's times. Codes with no time on
-    the chart (PP, UU, XX, NT, ...) are skipped.
+    the chart (PP, UU, XX, NT, ...) are skipped. GH/GM/GT/GW count as G.
+  * Rooms used by DoMS-slot courses (ML, MP-MZ; times unknown) are left out,
+    as are numbered rooms that aren't classrooms (NOT_CLASSROOMS).
   * reported_occupied.json lists rooms students found in use; they are never
     shown as free at those times.
   * A room is free in a slot when nothing above uses it then. Only rooms named
@@ -36,6 +41,7 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 from collections import Counter
+from datetime import date
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -54,6 +60,12 @@ GRID = {
     'Friday':    ['F', 'G', 'A', 'B', 'C', 'K K1 T', 'L L2 T', 'E'],
 }
 ON_GRID = {code for row in GRID.values() for cell in row for code in cell.split()}
+
+# DoMS courses use their own slots (ML, MP-MZ) whose times aren't on GRID. The
+# rooms they use can't be shown as free safely, so they are left out.
+DOMS_SLOT = re.compile(r'M[LP-Z]')
+# Numbered rooms that aren't confirmed classrooms
+NOT_CLASSROOMS = {'MES200', 'HTTP200B', 'NCCR308', 'PH263'}
 
 NS = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
       'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'}
@@ -111,17 +123,18 @@ def slot_codes(text):
 
 
 def on_grid(code, skipped):
-    """Map a slot code to grid codes: as-is, or A1 -> A. Unplaceable codes are counted."""
+    """Map a slot code to grid codes: as-is, A1 -> A, or GH/GM/GT/GW -> G.
+    Unplaceable codes are counted."""
     if code in ON_GRID:
         return [code]
-    m = re.fullmatch(r'([A-Z])\d', code)
+    m = re.fullmatch(r'([A-Z])\d', code) or re.fullmatch(r'(G)[HMTW]', code)
     if m and m.group(1) in ON_GRID:
         return [m.group(1)]
     skipped[code] += 1
     return []
 
 
-def to_json(buildings, days):
+def to_json(semester, buildings, days):
     """Same layout as before: one line per slot, so diffs stay readable."""
     compact = lambda v: json.dumps(v, ensure_ascii=False, separators=(',', ':'))
     day_blocks = []
@@ -129,6 +142,7 @@ def to_json(buildings, days):
         lines = ',\n'.join('      ' + compact(s) for s in slots)
         day_blocks.append(f'    {compact(day)}: [\n{lines}\n    ]')
     return ('{\n'
+            f'  "semester": {compact(semester)},\n'
             f'  "buildings": {compact(buildings)},\n'
             '  "days": {\n' + ',\n'.join(day_blocks) + '\n  }\n}\n')
 
@@ -141,7 +155,7 @@ def dept(row):
     return re.match(r'[A-Z]*', course(row)).group()
 
 
-def main(patterns, fill_from):
+def main(patterns, fill_from, semester):
     files = sorted({f for p in patterns for f in glob.glob(p)})
     if not files:
         sys.exit('No .xlsx files matched. Pass the SlotWise_SubjectWise List downloads.')
@@ -193,6 +207,11 @@ def main(patterns, fill_from):
         busy.setdefault(room, set()).add((day, starts.index(start)))
     not_listed = sorted({room for room, _, _ in reported if room not in rooms})
 
+    doms = {n for r in rows if any(DOMS_SLOT.fullmatch(c) for c in slot_codes(r.get('Slot')))
+            for n in room_names(r.get('RoomNo'))}
+    left_out = sorted((doms | NOT_CLASSROOMS) & rooms)
+    rooms -= doms | NOT_CLASSROOMS
+
     ordered = sorted(rooms, key=lambda r: (re.match(r'[A-Z]+', r).group(), int(re.search(r'\d+', r).group()), r))
     days = {}
     for day in GRID:
@@ -203,12 +222,15 @@ def main(patterns, fill_from):
         slots.insert(5, {'time': '14:00–16:45', 'start': 840, 'end': 1005, 'rooms': both})
         days[day] = slots
     buildings = sorted({re.match(r'[A-Z]+', r).group() for r in ordered})
-    OUT.write_text(to_json(buildings, days), encoding='utf-8', newline='\n')
+    OUT.write_text(to_json(semester, buildings, days), encoding='utf-8', newline='\n')
 
     print(f'Read {len(files)} files. Wrote {OUT.name}: {len(ordered)} rooms in {len(buildings)} buildings.')
     if fill_from:
         print(f'From {Path(fill_from).name}: {filled} blank rooms filled, {widened} room lists widened, '
               f'departments added: {dict(added_depts) or "none"}.')
+    print(f'Semester: {semester}')
+    if left_out:
+        print('Left out (DoMS slots with unknown times, or not classrooms):', left_out)
     print(f'Applied {len(reported)} reported-occupied entries from {REPORTED.name}.')
     if not_listed:
         print('  (these reported rooms are not in the room list anyway):', not_listed)
@@ -223,5 +245,13 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('files', nargs='+', help='SlotWise_SubjectWise List .xlsx downloads (globs ok)')
     ap.add_argument('--fill-from', help='an older download used to fill blank or shortened room lists')
+    ap.add_argument('--semester', required=True, help='name shown in the app, e.g. "Jan–May 2027"')
+    ap.add_argument('--starts', type=date.fromisoformat, help='first class day, YYYY-MM-DD')
+    ap.add_argument('--ends', type=date.fromisoformat, help='last class day, YYYY-MM-DD')
     args = ap.parse_args()
-    main(args.files, args.fill_from)
+    if bool(args.starts) != bool(args.ends):
+        ap.error('give both --starts and --ends, or neither')
+    semester = {'name': args.semester}
+    if args.starts:
+        semester.update(starts=args.starts.isoformat(), ends=args.ends.isoformat())
+    main(args.files, args.fill_from, semester)
