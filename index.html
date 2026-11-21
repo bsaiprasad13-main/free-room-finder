@@ -132,6 +132,7 @@
       font-size: 17px;
       font-weight: 700;
       letter-spacing: -.3px;
+      white-space: nowrap;
     }
 
     .brand-name span {
@@ -140,6 +141,7 @@
 
     /* Semester the timetable is for, next to the name */
     .sem-pill {
+      position: relative;
       margin-left: 8px;
       padding: 3px 8px;
       border-radius: 6px;
@@ -154,6 +156,34 @@
 
     .sem-pill[hidden] {
       display: none;
+    }
+
+    /* Green with a NEW tag for the first days a phone sees a new semester */
+    .sem-pill.new {
+      background: var(--green-dim);
+      border-color: rgba(74, 222, 128, .4);
+      color: var(--green);
+    }
+
+    /* NEW sits on the pill's corner, so the pill doesn't get wider */
+    .sem-new {
+      position: absolute;
+      top: -10px;
+      right: -15px;
+      padding: 1px 4px;
+      border-radius: 4px;
+      background: var(--green);
+      color: #0a0c10;
+      font-size: 8.5px;
+      font-weight: 700;
+      letter-spacing: .4px;
+    }
+
+    /* Too narrow for the name, the pill and Read Me; Read Me still names the semester */
+    @media (max-width: 359px) {
+      .sem-pill {
+        display: none;
+      }
     }
 
     /* Read Me button — top right */
@@ -1826,6 +1856,20 @@
     // ── Semester ──
     // Pill and Read Me line name the semester; outside its dates an amber notice
     // warns that rooms may not match current classes.
+    // NEW for 14 days from the first time this phone sees this semester's data.
+    // If storage is blocked, it just stays NEW.
+    const NEW_DAYS = 14;
+    function semesterIsNew() {
+      try {
+        const key = 'semesterFirstSeen:' + SEMESTER.name;
+        let first = Number(localStorage.getItem(key));
+        if (!first) { first = Date.now(); localStorage.setItem(key, first); }
+        return Date.now() - first < NEW_DAYS * 864e5;
+      } catch (e) {
+        return true;
+      }
+    }
+
     function renderSemester() {
       const pill = document.getElementById('semPill'), readme = document.getElementById('semReadme');
       const notice = document.getElementById('semNotice');
@@ -1833,6 +1877,10 @@
       notice.innerHTML = '';
       if (!SEMESTER) return;
       pill.textContent = SEMESTER.name;
+      const isNew = semesterIsNew();
+      pill.classList.toggle('new', isNew);
+      if (isNew) pill.insertAdjacentHTML('beforeend', '<span class="sem-new" aria-hidden="true">NEW</span>');
+      pill.setAttribute('aria-label', SEMESTER.name + (isNew ? ', new' : ''));
       readme.querySelector('strong').textContent = SEMESTER.name;
       if (!SEMESTER.starts || !SEMESTER.ends) return;
       const n = new Date();

@@ -29,6 +29,7 @@ Goes with [spec.md](spec.md) and [design.md](design.md). Status: **built**, wait
 - [x] Semester pill in the header (`.sem-pill`), from `timetable.json`
 - [x] Amber notice under the header, before/after the semester dates only
 - [x] Read Me line naming the semester
+- [x] Green pill + NEW badge for 14 days from the first time each phone sees the semester; tested at 320/360/375px and desktop
 - [x] Footer fallback count updated to the new room count
 
 ## 5. Test
