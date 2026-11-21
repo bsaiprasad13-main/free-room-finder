@@ -66,6 +66,8 @@ They're stored at the top of `timetable.json`:
 - The pill text comes from `semester.name`.
 - Muted style, so it doesn't compete with the name: `--surface` background, 1px `--border2` border, `--text2` text, mono 10px / 600, 3px 8px padding, 6px radius, 8px gap after the name.
 - No pill if the data file has no `semester` field (an older cached `timetable.json`).
+- **NEW badge:** for 14 days from the first time a phone opens the app with this semester's data, the pill turns green and gets a small green **NEW** badge on its top-right corner. The first-seen time is stored on the phone (`localStorage`, key `semesterFirstSeen:<name>`); if storage is blocked, it stays NEW. The badge sits on the corner rather than beside the pill, so the pill doesn't get wider. Screen readers hear "Jan–May 2027, new".
+- "Free Rooms" never wraps. Below 360px wide there's no room for the name, the pill and Read Me, so the pill is hidden there (Read Me still names the semester).
 
 **Notice (only outside the semester dates)**
 
