@@ -47,7 +47,7 @@ Expected result: about **125 rooms** (132 named, minus the 7 in R1.3), before de
 ### R2. Semester label
 - R2.1 The page shows the semester name (for example "Jan–May 2027") at all times.
 - R2.2 **Outside the semester dates**, an amber notice says the timetable may not match current classes:
-  - Before the start: "Timetable for Jan–May 2027 · classes start 2 Jan".
+  - Before the start: "Jan–May 2027 · classes haven't started" (no exact date is shown).
   - After the end: "Jan–May 2027 timetable has ended · rooms may be wrong".
 - R2.3 The Read Me says which semester the data is for.
 - R2.4 It works at 375px phone width with no overlap or horizontal scroll, in the existing dark theme.

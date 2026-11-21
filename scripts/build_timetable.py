@@ -2,7 +2,7 @@
 
 Usage (from the repo root):
     python scripts/build_timetable.py "Downloads/SlotWise_SubjectWise List__2026-11-21.xlsx" \
-        --semester "Jan–May 2027" [--starts 2027-01-04 --ends 2027-05-07]
+        --semester "Jan–May 2027" [--starts YYYY-MM-DD --ends YYYY-MM-DD]
 
 --semester is the name shown in the app. With --starts/--ends the app also
 warns when today is outside the semester. --fill-from (below) is optional.
