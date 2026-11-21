@@ -11,7 +11,7 @@ New command-line options:
 
 ```
 python scripts/build_timetable.py "Downloads/SlotWise_SubjectWise List__2026-11-21.xlsx" \
-    --semester "Jan–May 2027" --starts 2027-01-02 --ends 2027-05-07
+    --semester "Jan–May 2027" --starts YYYY-MM-DD --ends YYYY-MM-DD
 ```
 
 (The dates are placeholders until you confirm the academic calendar, spec Q2.)
@@ -20,7 +20,7 @@ They're stored at the top of `timetable.json`:
 
 ```json
 {
-  "semester": {"name": "Jan–May 2027", "starts": "2027-01-02", "ends": "2027-05-07"},
+  "semester": {"name": "Jan–May 2027", "starts": "YYYY-MM-DD", "ends": "YYYY-MM-DD"},
   "buildings": [...],
   "days": {...}
 }
@@ -71,7 +71,7 @@ They're stored at the top of `timetable.json`:
 
 | When | Text |
 |---|---|
-| Before `starts` | `📅 Jan–May 2027 · classes start 4 Jan` |
+| Before `starts` | `📅 Jan–May 2027 · classes haven't started` |
 | After `ends` | `⚠️ Jan–May 2027 is over · may be wrong` |
 | During the semester | *(hidden)* |
 
@@ -91,4 +91,4 @@ One line is added: *"Rooms are based on the **Jan–May 2027** course list."* Th
 ## 3. Release
 1. Build and open the PR now, so it can be reviewed.
 2. **Merge after the Jul–Nov semester's last class day** (spec R3.1). Slate, Vercel and GitHub Pages deploy automatically on merge.
-3. Between the merge and the start date, students see the "classes start" notice.
+3. Between the merge and the start date, students see the "classes haven't started" notice. The notice never shows an exact date.
